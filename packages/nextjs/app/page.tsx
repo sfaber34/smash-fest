@@ -183,8 +183,8 @@ const Home: NextPage = () => {
 
     if (impactSpeed > MIN_IMPACT_FOR_DAMAGE) {
       const collisionAngle = Math.atan2(dy, dx);
-      const playerHitZone = getHitZone(playerCar, collisionAngle + Math.PI);
-      const targetHitZone = getHitZone(targetCar, collisionAngle);
+      const playerHitZone = getHitZone(playerCar, collisionAngle); // Player's side facing target
+      const targetHitZone = getHitZone(targetCar, collisionAngle + Math.PI); // Target's side facing player
 
       const damage = Math.round((impactSpeed - MIN_IMPACT_FOR_DAMAGE) * DAMAGE_MULTIPLIER);
 
@@ -619,7 +619,7 @@ const Home: NextPage = () => {
       <div className="mt-4 flex gap-4 text-white flex-wrap justify-center">
         <div className="bg-gray-800 px-4 py-2 rounded-lg">
           <span className="text-gray-400">Speed:</span>{" "}
-          <span className="font-mono text-lg text-green-400">{speed}</span>
+          <span className="font-mono text-lg text-green-400 inline-block w-12 text-right">{speed.toFixed(1)}</span>
         </div>
         <div className="bg-gray-800 px-4 py-2 rounded-lg">
           <span className="text-gray-400">Your Health:</span>{" "}
