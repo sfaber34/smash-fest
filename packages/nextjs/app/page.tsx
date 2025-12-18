@@ -691,13 +691,19 @@ const Home: NextPage = () => {
   }, [gameLoop]);
 
   return (
-    <div className="fixed inset-0 bg-gray-900 flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 w-screen h-screen bg-gray-900 flex items-center justify-center overflow-hidden">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
         height={CANVAS_HEIGHT}
-        className="max-w-full max-h-full"
-        style={{ objectFit: "contain" }}
+        className="block"
+        style={{
+          maxWidth: "100vw",
+          maxHeight: "100vh",
+          width: "auto",
+          height: "auto",
+          objectFit: "contain",
+        }}
         tabIndex={0}
         onTouchStart={firePendingHaptic}
         onTouchMove={firePendingHaptic}
