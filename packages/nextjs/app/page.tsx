@@ -691,7 +691,7 @@ const Home: NextPage = () => {
   }, [gameLoop]);
 
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-gray-900 flex items-center justify-center overflow-hidden">
+    <div className="fixed inset-0 w-screen h-screen bg-gray-900 flex items-center justify-start overflow-hidden">
       <canvas
         ref={canvasRef}
         width={CANVAS_WIDTH}
@@ -711,7 +711,14 @@ const Home: NextPage = () => {
 
       {/* Mobile joystick overlay */}
       {isMobile && (
-        <div className="fixed bottom-8 right-2 z-50">
+        <div
+          style={{
+            position: "fixed",
+            bottom: "32px",
+            right: "8px",
+            zIndex: 50,
+          }}
+        >
           <Joystick
             size={120}
             baseColor="rgba(255, 255, 255, 0.3)"
@@ -724,9 +731,28 @@ const Home: NextPage = () => {
 
       {/* Enable Haptics button - user must tap once to unlock iOS haptics */}
       {isMobile && !hapticsEnabled && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
-          <label className="flex items-center gap-2 bg-black/80 text-white px-4 py-2 rounded-full cursor-pointer">
-            <span className="text-sm">Enable Haptics</span>
+        <div
+          style={{
+            position: "fixed",
+            top: "16px",
+            right: "8px",
+            zIndex: 50,
+          }}
+        >
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              backgroundColor: "rgba(0, 0, 0, 0.8)",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: "9999px",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
+            <span>Enable Haptics</span>
             <input
               type="checkbox"
               // @ts-expect-error - switch is a valid Safari attribute
@@ -736,7 +762,7 @@ const Home: NextPage = () => {
                   setHapticsEnabled(true);
                 }
               }}
-              className="w-10 h-6"
+              style={{ width: "40px", height: "24px" }}
             />
           </label>
         </div>
@@ -744,7 +770,19 @@ const Home: NextPage = () => {
 
       {/* Haptics enabled indicator */}
       {isMobile && hapticsEnabled && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600/80 text-white px-4 py-2 rounded-full text-sm">
+        <div
+          style={{
+            position: "fixed",
+            top: "16px",
+            right: "8px",
+            zIndex: 50,
+            backgroundColor: "rgba(22, 163, 74, 0.8)",
+            color: "white",
+            padding: "8px 16px",
+            borderRadius: "9999px",
+            fontSize: "14px",
+          }}
+        >
           🎮 Haptics ON
         </div>
       )}
