@@ -20,7 +20,7 @@ const triggerIOSHaptic = (count: number = 1) => {
     checkbox.style.opacity = "0";
     checkbox.style.pointerEvents = "none";
     document.body.appendChild(checkbox);
-    checkbox.checked = true;
+    checkbox.click();
     checkbox.remove();
   };
 
@@ -47,7 +47,6 @@ const queueHaptic = (intensity: "light" | "medium" | "heavy" = "medium") => {
   // Keep the strongest pending haptic
   if (!pendingHaptic || intensity === "heavy" || (intensity === "medium" && pendingHaptic === "light")) {
     pendingHaptic = intensity;
-    console.log("[Haptic] Queued:", intensity);
   }
 };
 
@@ -55,7 +54,6 @@ const queueHaptic = (intensity: "light" | "medium" | "heavy" = "medium") => {
 const firePendingHaptic = () => {
   if (!pendingHaptic) return;
 
-  console.log("[Haptic] Firing:", pendingHaptic);
   triggerHapticDirect(pendingHaptic);
   pendingHaptic = null;
 };
@@ -192,6 +190,7 @@ const Home: NextPage = () => {
   const [, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const lastCollisionRef = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(false);
 
   // Detect mobile/touch device
   useEffect(() => {
@@ -714,6 +713,33 @@ const Home: NextPage = () => {
             move={handleJoystickMove}
             stop={handleJoystickStop}
           />
+        </div>
+      )}
+
+      {/* Enable Haptics button - user must tap once to unlock iOS haptics */}
+      {isMobile && !hapticsEnabled && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+          <label className="flex items-center gap-2 bg-black/80 text-white px-4 py-2 rounded-full cursor-pointer">
+            <span className="text-sm">Enable Haptics</span>
+            <input
+              type="checkbox"
+              // @ts-expect-error - switch is a valid Safari attribute
+              switch=""
+              onChange={e => {
+                if (e.target.checked) {
+                  setHapticsEnabled(true);
+                }
+              }}
+              className="w-10 h-6"
+            />
+          </label>
+        </div>
+      )}
+
+      {/* Haptics enabled indicator */}
+      {isMobile && hapticsEnabled && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600/80 text-white px-4 py-2 rounded-full text-sm">
+          🎮 Haptics ON
         </div>
       )}
     </div>
