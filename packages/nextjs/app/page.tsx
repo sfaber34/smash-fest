@@ -101,11 +101,12 @@ interface Car {
   isStatic: boolean;
 }
 
-interface Keys {
-  up: boolean;
-  down: boolean;
-  left: boolean;
-  right: boolean;
+// Analog input values (0 to 1 for intensity)
+interface AnalogInput {
+  forward: number; // 0 to 1
+  reverse: number; // 0 to 1
+  left: number; // 0 to 1
+  right: number; // 0 to 1
 }
 
 interface DamagePopup {
@@ -182,7 +183,7 @@ const Home: NextPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerCarRef = useRef<Car>(createCar(200, CANVAS_HEIGHT / 2, "#e74c3c", 0));
   const targetCarRef = useRef<Car>(createCar(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, "#3498db", Math.PI / 4, false));
-  const keysRef = useRef<Keys>({ up: false, down: false, left: false, right: false });
+  const inputRef = useRef<AnalogInput>({ forward: 0, reverse: 0, left: 0, right: 0 });
   const animationFrameRef = useRef<number>(0);
   const damagePopupsRef = useRef<DamagePopup[]>([]);
   const [, setSpeed] = useState(0);
@@ -202,29 +203,44 @@ const Home: NextPage = () => {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Handle joystick input
+  // Handle joystick input - analog values based on joystick position
   const handleJoystickMove = useCallback((event: IJoystickUpdateEvent) => {
     // Fire any pending haptics on user touch (iOS Safari requirement)
     firePendingHaptic();
 
-    const threshold = 0.3;
+    const deadzone = 0.15; // Small deadzone to prevent drift
     const x = event.x ?? 0;
     const y = event.y ?? 0;
 
-    keysRef.current.up = y > threshold;
-    keysRef.current.down = y < -threshold;
-    keysRef.current.left = x < -threshold;
-    keysRef.current.right = x > threshold;
+    // Convert to analog values (0 to 1) with deadzone
+    const applyDeadzone = (value: number) => {
+      const absValue = Math.abs(value);
+      if (absValue < deadzone) return 0;
+      // Rescale from deadzone-1 to 0-1
+      return (absValue - deadzone) / (1 - deadzone);
+    };
+
+    // Apply gentle curve for softer center sensitivity
+    // Power of 1.5 makes small inputs slightly smaller while staying responsive
+    const applySteringCurve = (value: number) => {
+      return Math.pow(value, 1.5);
+    };
+
+    inputRef.current.forward = y > deadzone ? applyDeadzone(y) : 0;
+    inputRef.current.reverse = y < -deadzone ? applyDeadzone(y) : 0;
+    // Apply curve to steering for softer center feel
+    inputRef.current.left = x < -deadzone ? applySteringCurve(applyDeadzone(x)) : 0;
+    inputRef.current.right = x > deadzone ? applySteringCurve(applyDeadzone(x)) : 0;
   }, []);
 
   const handleJoystickStop = useCallback(() => {
     // Fire any pending haptics on user touch release
     firePendingHaptic();
 
-    keysRef.current.up = false;
-    keysRef.current.down = false;
-    keysRef.current.left = false;
-    keysRef.current.right = false;
+    inputRef.current.forward = 0;
+    inputRef.current.reverse = 0;
+    inputRef.current.left = 0;
+    inputRef.current.right = 0;
   }, []);
 
   // Handle car-to-car collision
@@ -304,15 +320,16 @@ const Home: NextPage = () => {
   const updatePhysics = useCallback(() => {
     const car = playerCarRef.current;
     const targetCar = targetCarRef.current;
-    const keys = keysRef.current;
+    const input = inputRef.current;
 
     const currentSpeed = Math.sqrt(car.vx * car.vx + car.vy * car.vy);
 
     const steeringFactor =
       currentSpeed < MIN_SPEED_TO_TURN ? (currentSpeed / MIN_SPEED_TO_TURN) * 0.3 : Math.min(1, currentSpeed / 3);
 
-    if (keys.left) car.angularVel -= TURN_RATE * steeringFactor;
-    if (keys.right) car.angularVel += TURN_RATE * steeringFactor;
+    // Analog steering - intensity scales the turn rate
+    if (input.left > 0) car.angularVel -= TURN_RATE * steeringFactor * input.left;
+    if (input.right > 0) car.angularVel += TURN_RATE * steeringFactor * input.right;
 
     const MAX_ANGULAR_VEL = 0.08;
     car.angularVel = Math.max(-MAX_ANGULAR_VEL, Math.min(MAX_ANGULAR_VEL, car.angularVel));
@@ -323,18 +340,19 @@ const Home: NextPage = () => {
     const forwardX = Math.cos(car.angle);
     const forwardY = Math.sin(car.angle);
 
-    if (keys.up) {
-      car.vx += forwardX * ACCELERATION;
-      car.vy += forwardY * ACCELERATION;
+    // Analog acceleration - intensity scales the acceleration
+    if (input.forward > 0) {
+      car.vx += forwardX * ACCELERATION * input.forward;
+      car.vy += forwardY * ACCELERATION * input.forward;
     }
-    if (keys.down) {
+    if (input.reverse > 0) {
       const forwardSpeed = car.vx * forwardX + car.vy * forwardY;
       if (forwardSpeed > 0.5) {
-        car.vx -= forwardX * BRAKE_DECEL;
-        car.vy -= forwardY * BRAKE_DECEL;
+        car.vx -= forwardX * BRAKE_DECEL * input.reverse;
+        car.vy -= forwardY * BRAKE_DECEL * input.reverse;
       } else {
-        car.vx -= forwardX * ACCELERATION * 0.5;
-        car.vy -= forwardY * ACCELERATION * 0.5;
+        car.vx -= forwardX * ACCELERATION * 0.5 * input.reverse;
+        car.vy -= forwardY * ACCELERATION * 0.5 * input.reverse;
       }
     }
 
@@ -659,20 +677,20 @@ const Home: NextPage = () => {
   // Keyboard input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowUp" || e.key === "w") keysRef.current.up = true;
-      if (e.key === "ArrowDown" || e.key === "s") keysRef.current.down = true;
-      if (e.key === "ArrowLeft" || e.key === "a") keysRef.current.left = true;
-      if (e.key === "ArrowRight" || e.key === "d") keysRef.current.right = true;
+      if (e.key === "ArrowUp" || e.key === "w") inputRef.current.forward = 1;
+      if (e.key === "ArrowDown" || e.key === "s") inputRef.current.reverse = 1;
+      if (e.key === "ArrowLeft" || e.key === "a") inputRef.current.left = 1;
+      if (e.key === "ArrowRight" || e.key === "d") inputRef.current.right = 1;
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
         e.preventDefault();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "ArrowUp" || e.key === "w") keysRef.current.up = false;
-      if (e.key === "ArrowDown" || e.key === "s") keysRef.current.down = false;
-      if (e.key === "ArrowLeft" || e.key === "a") keysRef.current.left = false;
-      if (e.key === "ArrowRight" || e.key === "d") keysRef.current.right = false;
+      if (e.key === "ArrowUp" || e.key === "w") inputRef.current.forward = 0;
+      if (e.key === "ArrowDown" || e.key === "s") inputRef.current.reverse = 0;
+      if (e.key === "ArrowLeft" || e.key === "a") inputRef.current.left = 0;
+      if (e.key === "ArrowRight" || e.key === "d") inputRef.current.right = 0;
     };
 
     window.addEventListener("keydown", handleKeyDown);
