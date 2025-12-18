@@ -130,9 +130,9 @@ const Home: NextPage = () => {
   const keysRef = useRef<Keys>({ up: false, down: false, left: false, right: false });
   const animationFrameRef = useRef<number>(0);
   const damagePopupsRef = useRef<DamagePopup[]>([]);
-  const [speed, setSpeed] = useState(0);
+  const [, setSpeed] = useState(0);
   const [, setPlayerHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
-  const [targetHealth, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
+  const [, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const lastCollisionRef = useRef(0);
 
   // Handle car-to-car collision
@@ -594,65 +594,16 @@ const Home: NextPage = () => {
     return () => cancelAnimationFrame(animationFrameRef.current);
   }, [gameLoop]);
 
-  // Reset cars
-  const resetCars = () => {
-    playerCarRef.current = createCar(200, CANVAS_HEIGHT / 2, "#e74c3c", 0);
-    targetCarRef.current = createCar(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, "#3498db", Math.PI / 4, false);
-    damagePopupsRef.current = [];
-  };
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-4">
-      <h1 className="text-4xl font-bold text-white mb-2 tracking-wider">🚗 SMASH FEST 💥</h1>
-      <p className="text-gray-400 mb-4">Demolition Derby</p>
-
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          className="border-4 border-gray-700 rounded-lg shadow-2xl"
-          tabIndex={0}
-        />
-      </div>
-
-      <div className="mt-4 flex gap-4 text-white flex-wrap justify-center">
-        <div className="bg-gray-800 px-4 py-2 rounded-lg">
-          <span className="text-gray-400">Speed:</span>{" "}
-          <span className="font-mono text-lg text-green-400 inline-block w-12 text-right">{speed.toFixed(1)}</span>
-        </div>
-        <div className="bg-gray-800 px-4 py-2 rounded-lg">
-          <span className="text-gray-400">Your Health:</span>{" "}
-          <span className="font-mono text-lg text-red-400">{Math.round(getTotalHealth(playerCarRef.current))}%</span>
-        </div>
-        <div className="bg-gray-800 px-4 py-2 rounded-lg">
-          <span className="text-gray-400">Target Health:</span>{" "}
-          <span className="font-mono text-lg text-blue-400">
-            {Math.round((targetHealth.front + targetHealth.rear + targetHealth.left + targetHealth.right) / 4)}%
-          </span>
-        </div>
-        <button
-          onClick={resetCars}
-          className="bg-red-600 hover:bg-red-700 px-6 py-2 rounded-lg font-bold transition-colors"
-        >
-          Reset All
-        </button>
-      </div>
-
-      <div className="mt-4 text-gray-400 text-center">
-        <p className="text-sm">
-          <span className="text-yellow-400">💡 Tip:</span> Hit the blue target car at high speed! Damage is based on
-          impact velocity.
-        </p>
-      </div>
-
-      <div className="mt-4 flex gap-4 justify-center">
-        <kbd className="px-3 py-2 bg-gray-700 rounded text-white">↑</kbd>
-        <kbd className="px-3 py-2 bg-gray-700 rounded text-white">↓</kbd>
-        <kbd className="px-3 py-2 bg-gray-700 rounded text-white">←</kbd>
-        <kbd className="px-3 py-2 bg-gray-700 rounded text-white">→</kbd>
-        <span className="text-gray-500 self-center">or WASD</span>
-      </div>
+    <div className="fixed inset-0 bg-gray-900 flex items-center justify-center overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        className="max-w-full max-h-full"
+        style={{ objectFit: "contain" }}
+        tabIndex={0}
+      />
     </div>
   );
 };
