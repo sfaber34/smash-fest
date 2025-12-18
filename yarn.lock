@@ -3664,6 +3664,7 @@ __metadata:
     eslint-config-next: ~15.2.3
     eslint-config-prettier: ~10.1.1
     eslint-plugin-prettier: ~5.2.4
+    ios-haptics: ^0.1.4
     kubo-rpc-client: ~5.0.2
     next: ~15.2.3
     next-nprogress-bar: ~2.3.13
@@ -10637,6 +10638,13 @@ __metadata:
   dependencies:
     fp-ts: ^1.0.0
   checksum: 619134006778f7ca42693716ade7fc1a383079e7848bbeabc67a0e4ac9139cda6b2a88a052d539ab7d554033ee2ffe4dab5cb96b958c83fee2dff73d23f03e88
+  languageName: node
+  linkType: hard
+
+"ios-haptics@npm:^0.1.4":
+  version: 0.1.4
+  resolution: "ios-haptics@npm:0.1.4"
+  checksum: f1bd31981d0bb4d570fb94c2bada63759e2f9a528d6863748f1eb8b248756cc611be7b634be56077bb7fb624991fc530c896f59167e0fbce762b513bfba28a12
   languageName: node
   linkType: hard
 

@@ -5,6 +5,61 @@ import type { NextPage } from "next";
 import { Joystick } from "react-joystick-component";
 import type { IJoystickUpdateEvent } from "react-joystick-component/build/lib/Joystick";
 
+// Haptic queue for iOS (Safari requires user gesture to trigger haptics)
+let pendingHaptic: "light" | "medium" | "heavy" | null = null;
+
+// Direct iOS haptic implementation using checkbox switch trick
+const triggerIOSHaptic = (count: number = 1) => {
+  if (typeof document === "undefined") return;
+
+  const fire = () => {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.setAttribute("switch", "");
+    checkbox.style.position = "fixed";
+    checkbox.style.opacity = "0";
+    checkbox.style.pointerEvents = "none";
+    document.body.appendChild(checkbox);
+    checkbox.checked = true;
+    checkbox.remove();
+  };
+
+  for (let i = 0; i < count; i++) {
+    setTimeout(fire, i * 50);
+  }
+};
+
+// Cross-platform haptic trigger
+const triggerHapticDirect = (intensity: "light" | "medium" | "heavy" = "medium") => {
+  // Try navigator.vibrate first (Android)
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    const duration = intensity === "light" ? 10 : intensity === "medium" ? 25 : 50;
+    navigator.vibrate(duration);
+  }
+
+  // Also try iOS checkbox trick
+  const count = intensity === "heavy" ? 3 : intensity === "medium" ? 2 : 1;
+  triggerIOSHaptic(count);
+};
+
+// Queue a haptic to be triggered on next user touch (for iOS Safari compatibility)
+const queueHaptic = (intensity: "light" | "medium" | "heavy" = "medium") => {
+  // Keep the strongest pending haptic
+  if (!pendingHaptic || intensity === "heavy" || (intensity === "medium" && pendingHaptic === "light")) {
+    pendingHaptic = intensity;
+    console.log("[Haptic] Queued:", intensity);
+  }
+};
+
+// Fire pending haptic - call this from user gesture handlers (touch/click)
+const firePendingHaptic = () => {
+  if (!pendingHaptic) return;
+
+  console.log("[Haptic] Firing:", pendingHaptic);
+  triggerHapticDirect(pendingHaptic);
+  pendingHaptic = null;
+};
+
 // Constants
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 600;
@@ -150,6 +205,9 @@ const Home: NextPage = () => {
 
   // Handle joystick input
   const handleJoystickMove = useCallback((event: IJoystickUpdateEvent) => {
+    // Fire any pending haptics on user touch (iOS Safari requirement)
+    firePendingHaptic();
+
     const threshold = 0.3;
     const x = event.x ?? 0;
     const y = event.y ?? 0;
@@ -161,6 +219,9 @@ const Home: NextPage = () => {
   }, []);
 
   const handleJoystickStop = useCallback(() => {
+    // Fire any pending haptics on user touch release
+    firePendingHaptic();
+
     keysRef.current.up = false;
     keysRef.current.down = false;
     keysRef.current.left = false;
@@ -219,6 +280,10 @@ const Home: NextPage = () => {
       const targetHitZone = getHitZone(targetCar, collisionAngle + Math.PI); // Target's side facing player
 
       const damage = Math.round((impactSpeed - MIN_IMPACT_FOR_DAMAGE) * DAMAGE_MULTIPLIER);
+
+      // Queue haptic feedback based on impact intensity (fired on next user touch)
+      const hapticIntensity = damage > 15 ? "heavy" : damage > 8 ? "medium" : "light";
+      queueHaptic(hapticIntensity);
 
       // Attacker takes much less damage
       playerCar.health[playerHitZone] = Math.max(0, playerCar.health[playerHitZone] - damage * ATTACKER_DAMAGE_RATIO);
@@ -635,6 +700,8 @@ const Home: NextPage = () => {
         className="max-w-full max-h-full"
         style={{ objectFit: "contain" }}
         tabIndex={0}
+        onTouchStart={firePendingHaptic}
+        onTouchMove={firePendingHaptic}
       />
 
       {/* Mobile joystick overlay */}
