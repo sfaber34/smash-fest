@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NextPage } from "next";
+import { Joystick } from "react-joystick-component";
+import type { IJoystickUpdateEvent } from "react-joystick-component/build/lib/Joystick";
 
 // Constants
 const CANVAS_WIDTH = 900;
@@ -134,6 +136,36 @@ const Home: NextPage = () => {
   const [, setPlayerHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const [, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const lastCollisionRef = useRef(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile/touch device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile("ontouchstart" in window || navigator.maxTouchPoints > 0);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Handle joystick input
+  const handleJoystickMove = useCallback((event: IJoystickUpdateEvent) => {
+    const threshold = 0.3;
+    const x = event.x ?? 0;
+    const y = event.y ?? 0;
+
+    keysRef.current.up = y > threshold;
+    keysRef.current.down = y < -threshold;
+    keysRef.current.left = x < -threshold;
+    keysRef.current.right = x > threshold;
+  }, []);
+
+  const handleJoystickStop = useCallback(() => {
+    keysRef.current.up = false;
+    keysRef.current.down = false;
+    keysRef.current.left = false;
+    keysRef.current.right = false;
+  }, []);
 
   // Handle car-to-car collision
   const handleCarCollision = useCallback((playerCar: Car, targetCar: Car) => {
@@ -604,6 +636,19 @@ const Home: NextPage = () => {
         style={{ objectFit: "contain" }}
         tabIndex={0}
       />
+
+      {/* Mobile joystick overlay */}
+      {isMobile && (
+        <div className="fixed bottom-8 right-2 z-50">
+          <Joystick
+            size={120}
+            baseColor="rgba(255, 255, 255, 0.3)"
+            stickColor="rgba(255, 255, 255, 0.8)"
+            move={handleJoystickMove}
+            stop={handleJoystickStop}
+          />
+        </div>
+      )}
     </div>
   );
 };
