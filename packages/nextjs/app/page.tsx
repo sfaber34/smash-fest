@@ -3,50 +3,67 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type AnalogInput,
-  CANVAS_HEIGHT, // Constants
+  CANVAS_HEIGHT,
   CANVAS_WIDTH,
-  type Camera, // Types
+  type Camera,
   type Car,
   type DamagePopup,
   MINIMAP_HEIGHT,
   MINIMAP_WIDTH,
+  WALL_THICKNESS,
   WORLD_HEIGHT,
-  WORLD_WIDTH, // Car utilities
-  createCar, // Rendering
+  WORLD_WIDTH,
+  createCar,
   drawCar,
   drawDamagePopups,
-  drawMiniMap,
   drawSpeedBar,
   drawWorld,
   handleCarCollision,
   handleWallCollisions,
   updateCamera,
-  updateDamagePopups, // Physics
+  updateDamagePopups,
   updatePlayerCarPhysics,
-  updateTargetCarPhysics,
 } from "./game";
 import type { NextPage } from "next";
 import { Joystick } from "react-joystick-component";
 import type { IJoystickUpdateEvent } from "react-joystick-component/build/lib/Joystick";
+import { useMultiplayer } from "~~/hooks/useMultiplayer";
+
+// Generate random spawn position within playable area
+const getRandomSpawnPosition = () => {
+  const padding = WALL_THICKNESS + 100; // Stay away from walls
+  const x = padding + Math.random() * (WORLD_WIDTH - padding * 2);
+  const y = padding + Math.random() * (WORLD_HEIGHT - padding * 2);
+  const angle = Math.random() * Math.PI * 2; // Random starting angle
+  return { x, y, angle };
+};
 
 const Home: NextPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Game state refs
-  const playerCarRef = useRef<Car>(createCar(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, "#e74c3c", 0));
-  const targetCarRef = useRef<Car>(createCar(WORLD_WIDTH / 2 + 200, WORLD_HEIGHT / 2, "#3498db", Math.PI / 4, false));
+  // Game state refs - spawn at random location
+  const spawnRef = useRef(getRandomSpawnPosition());
+  const playerCarRef = useRef<Car>(
+    createCar(spawnRef.current.x, spawnRef.current.y, "#e74c3c", spawnRef.current.angle),
+  );
   const inputRef = useRef<AnalogInput>({ forward: 0, reverse: 0, left: 0, right: 0 });
   const animationFrameRef = useRef<number>(0);
   const damagePopupsRef = useRef<DamagePopup[]>([]);
-  const cameraRef = useRef<Camera>({ x: WORLD_WIDTH / 2 - CANVAS_WIDTH / 2, y: WORLD_HEIGHT / 2 - CANVAS_HEIGHT / 2 });
-  const lastCollisionRef = useRef(0);
+  const cameraRef = useRef<Camera>({
+    x: spawnRef.current.x - CANVAS_WIDTH / 2,
+    y: spawnRef.current.y - CANVAS_HEIGHT / 2,
+  });
+  const lastCollisionTimeRef = useRef<Map<string, number>>(new Map());
 
   // React state
   const [, setSpeed] = useState(0);
-  const [, setPlayerHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
-  const [, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const [isMobile, setIsMobile] = useState(false);
+
+  // Multiplayer hook
+  const { otherPlayersRef, isConnected, playerCount, interpolateOtherPlayers } = useMultiplayer({
+    playerCar: playerCarRef,
+  });
 
   // Detect mobile/touch device
   useEffect(() => {
@@ -88,27 +105,27 @@ const Home: NextPage = () => {
   // Update physics
   const updatePhysics = useCallback(() => {
     const playerCar = playerCarRef.current;
-    const targetCar = targetCarRef.current;
     const input = inputRef.current;
     const camera = cameraRef.current;
+
+    // Interpolate other players towards their network positions (smooth movement)
+    interpolateOtherPlayers();
 
     // Update player physics
     const newSpeed = updatePlayerCarPhysics(playerCar, input);
 
-    // Update target physics
-    updateTargetCarPhysics(targetCar);
+    // Handle collisions with other players
+    otherPlayersRef.current.forEach((interpolatedCar, odId) => {
+      const otherCar = interpolatedCar.current;
+      const lastTime = lastCollisionTimeRef.current.get(odId) || 0;
+      const newTime = handleCarCollision(playerCar, otherCar, lastTime, damagePopupsRef.current);
+      if (newTime !== lastTime) {
+        lastCollisionTimeRef.current.set(odId, newTime);
+      }
+    });
 
-    // Handle car-to-car collision
-    lastCollisionRef.current = handleCarCollision(
-      playerCar,
-      targetCar,
-      lastCollisionRef.current,
-      damagePopupsRef.current,
-    );
-
-    // Handle wall collisions
+    // Handle wall collisions for player
     handleWallCollisions(playerCar);
-    handleWallCollisions(targetCar);
 
     // Update camera
     updateCamera(camera, playerCar);
@@ -118,9 +135,7 @@ const Home: NextPage = () => {
 
     // Update React state for UI
     setSpeed(Math.round(newSpeed * 10) / 10);
-    setPlayerHealth({ ...playerCar.health });
-    setTargetHealth({ ...targetCar.health });
-  }, []);
+  }, [interpolateOtherPlayers, otherPlayersRef]);
 
   // Render main canvas
   const render = useCallback(() => {
@@ -131,7 +146,6 @@ const Home: NextPage = () => {
     if (!ctx) return;
 
     const playerCar = playerCarRef.current;
-    const targetCar = targetCarRef.current;
     const camera = cameraRef.current;
 
     // Clear canvas
@@ -145,8 +159,12 @@ const Home: NextPage = () => {
     // Draw world
     drawWorld(ctx);
 
-    // Draw cars
-    drawCar(ctx, targetCar);
+    // Draw other players (use interpolated current positions)
+    otherPlayersRef.current.forEach(interpolatedCar => {
+      drawCar(ctx, interpolatedCar.current);
+    });
+
+    // Draw player car (on top)
     drawCar(ctx, playerCar);
 
     // Draw damage popups
@@ -157,7 +175,7 @@ const Home: NextPage = () => {
 
     // Draw UI elements (in screen space)
     drawSpeedBar(ctx, playerCar);
-  }, []);
+  }, [otherPlayersRef]);
 
   // Render mini-map
   const renderMiniMap = useCallback(() => {
@@ -167,8 +185,59 @@ const Home: NextPage = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    drawMiniMap(ctx, playerCarRef.current, targetCarRef.current, cameraRef.current);
-  }, []);
+    const playerCar = playerCarRef.current;
+    const camera = cameraRef.current;
+
+    // Clear mini-map
+    ctx.clearRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Mini-map arena (walls)
+    ctx.fillStyle = "#5D4E37";
+    ctx.fillRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Mini-map inner area (drivable zone)
+    const wallRatio = 20 / WORLD_WIDTH;
+    const innerMargin = wallRatio * MINIMAP_WIDTH;
+    ctx.fillStyle = "#8B7355";
+    ctx.fillRect(innerMargin, innerMargin, MINIMAP_WIDTH - innerMargin * 2, MINIMAP_HEIGHT - innerMargin * 2);
+
+    // Mini-map border
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Draw viewport rectangle
+    const viewportX = (camera.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const viewportY = (camera.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+    const viewportW = (CANVAS_WIDTH / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const viewportH = (CANVAS_HEIGHT / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.strokeRect(viewportX, viewportY, viewportW, viewportH);
+
+    // Draw other players on mini-map (use interpolated positions)
+    otherPlayersRef.current.forEach(interpolatedCar => {
+      const car = interpolatedCar.current;
+      const carX = (car.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+      const carY = (car.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+      ctx.fillStyle = car.color;
+      ctx.beginPath();
+      ctx.arc(carX, carY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Draw player dot (on top, slightly larger)
+    const playerX = (playerCar.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const playerY = (playerCar.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+    ctx.fillStyle = playerCar.color;
+    ctx.beginPath();
+    ctx.arc(playerX, playerY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    // White border around player dot
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }, [otherPlayersRef]);
 
   // Game loop
   const gameLoop = useCallback(() => {
@@ -228,6 +297,24 @@ const Home: NextPage = () => {
         }}
         tabIndex={0}
       />
+
+      {/* Connection status & player count */}
+      <div
+        style={{
+          position: "fixed",
+          top: "16px",
+          left: "16px",
+          zIndex: 50,
+          backgroundColor: isConnected ? "rgba(22, 163, 74, 0.9)" : "rgba(220, 38, 38, 0.9)",
+          color: "white",
+          padding: "8px 16px",
+          borderRadius: "8px",
+          fontSize: "14px",
+          fontFamily: "monospace",
+        }}
+      >
+        {isConnected ? `🟢 ${playerCount} player${playerCount !== 1 ? "s" : ""} online` : "🔴 Connecting..."}
+      </div>
 
       {/* Mini-map */}
       <div

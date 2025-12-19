@@ -16,3 +16,6 @@ export * from "./physics";
 
 // Rendering
 export * from "./rendering";
+
+// Multiplayer
+export * from "./multiplayer";

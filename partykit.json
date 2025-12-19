@@ -1,0 +1,5 @@
+{
+  "$schema": "https://www.partykit.io/schema.json",
+  "name": "smash-fest",
+  "main": "party/server.ts"
+}

@@ -3669,6 +3669,7 @@ __metadata:
     next: ~15.2.3
     next-nprogress-bar: ~2.3.13
     next-themes: ~0.3.0
+    partysocket: ^1.1.6
     postcss: ~8.4.45
     prettier: ~3.5.3
     qrcode.react: ~4.0.1
@@ -9049,6 +9050,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"event-target-polyfill@npm:^0.0.4":
+  version: 0.0.4
+  resolution: "event-target-polyfill@npm:0.0.4"
+  checksum: cdcffcabdd0e35ca928c7c54d48dfb65cfaa6c089ce88ba0b79acd3485e82912273a7152d81662524e5c0d9f6a321d1a9bfbe62209640949e420c13131f05b38
+  languageName: node
+  linkType: hard
+
 "event-target-shim@npm:^5.0.0":
   version: 5.0.1
   resolution: "event-target-shim@npm:5.0.1"
@@ -13883,6 +13891,15 @@ __metadata:
   version: 2.1.0
   resolution: "parse-ms@npm:2.1.0"
   checksum: d5c66c76cca8df5bd0574e2d11b9c3752893b59b466e74308d4a2f09760dc5436a1633f549cad300fc8c3c19154d14959a3b8333d3b2f7bd75898fe18149d564
+  languageName: node
+  linkType: hard
+
+"partysocket@npm:^1.1.6":
+  version: 1.1.6
+  resolution: "partysocket@npm:1.1.6"
+  dependencies:
+    event-target-polyfill: ^0.0.4
+  checksum: bb1d0fed57ea8b1f175acc8cdcdc66476f8b7a156dcb33f1e528ac9f684780a11c4af0320d4fa82bffc63035b4af4ed1fc4aa89f47d26ce8356be4242192bf74
   languageName: node
   linkType: hard
 
