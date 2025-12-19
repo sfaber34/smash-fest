@@ -739,6 +739,8 @@ const Home: NextPage = () => {
         >
           <Joystick
             size={120}
+            baseShape={"square" as unknown as undefined}
+            controlPlaneShape={"square" as unknown as undefined}
             baseColor="rgba(255, 255, 255, 0.3)"
             stickColor="rgba(255, 255, 255, 0.8)"
             move={handleJoystickMove}
