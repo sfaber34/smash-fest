@@ -663,8 +663,8 @@ const Home: NextPage = () => {
     ctx.font = "12px monospace";
     ctx.fillText("SPEED", speedBarX, speedBarY - 5);
 
-    drawHealthBar(ctx, playerCar, "YOUR CAR", 30);
-    drawHealthBar(ctx, targetCar, "TARGET", 120);
+    // drawHealthBar(ctx, playerCar, "YOUR CAR", 30);
+    // drawHealthBar(ctx, targetCar, "TARGET", 120);
   }, [drawCar, drawHealthBar]);
 
   // Game loop
