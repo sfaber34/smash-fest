@@ -551,43 +551,43 @@ const Home: NextPage = () => {
     ctx.restore();
   }, []);
 
-  // Draw health bar
-  const drawHealthBar = useCallback((ctx: CanvasRenderingContext2D, car: Car, label: string, yOffset: number) => {
-    const barX = CANVAS_WIDTH - 180;
-    const barY = yOffset;
-    const barWidth = 160;
-    const barHeight = 12;
-    const zones = [
-      { name: "F", health: car.health.front, color: "#e74c3c" },
-      { name: "R", health: car.health.rear, color: "#f39c12" },
-      { name: "L", health: car.health.left, color: "#9b59b6" },
-      { name: "Rt", health: car.health.right, color: "#3498db" },
-    ];
-
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 12px monospace";
-    ctx.fillText(label, barX, barY - 5);
-
-    zones.forEach((zone, i) => {
-      const zoneY = barY + i * (barHeight + 4);
-
-      ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.fillRect(barX, zoneY, barWidth, barHeight);
-
-      const healthPercent = zone.health / 100;
-      ctx.fillStyle = zone.color;
-      ctx.fillRect(barX, zoneY, barWidth * healthPercent, barHeight);
-
-      ctx.strokeStyle = "#333";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(barX, zoneY, barWidth, barHeight);
-
-      ctx.fillStyle = "#fff";
-      ctx.font = "10px monospace";
-      ctx.fillText(zone.name, barX + 4, zoneY + 9);
-      ctx.fillText(`${Math.round(zone.health)}%`, barX + barWidth - 30, zoneY + 9);
-    });
-  }, []);
+  // Draw health bar (commented out for now)
+  // const drawHealthBar = useCallback((ctx: CanvasRenderingContext2D, car: Car, label: string, yOffset: number) => {
+  //   const barX = CANVAS_WIDTH - 180;
+  //   const barY = yOffset;
+  //   const barWidth = 160;
+  //   const barHeight = 12;
+  //   const zones = [
+  //     { name: "F", health: car.health.front, color: "#e74c3c" },
+  //     { name: "R", health: car.health.rear, color: "#f39c12" },
+  //     { name: "L", health: car.health.left, color: "#9b59b6" },
+  //     { name: "Rt", health: car.health.right, color: "#3498db" },
+  //   ];
+  //
+  //   ctx.fillStyle = "#fff";
+  //   ctx.font = "bold 12px monospace";
+  //   ctx.fillText(label, barX, barY - 5);
+  //
+  //   zones.forEach((zone, i) => {
+  //     const zoneY = barY + i * (barHeight + 4);
+  //
+  //     ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  //     ctx.fillRect(barX, zoneY, barWidth, barHeight);
+  //
+  //     const healthPercent = zone.health / 100;
+  //     ctx.fillStyle = zone.color;
+  //     ctx.fillRect(barX, zoneY, barWidth * healthPercent, barHeight);
+  //
+  //     ctx.strokeStyle = "#333";
+  //     ctx.lineWidth = 1;
+  //     ctx.strokeRect(barX, zoneY, barWidth, barHeight);
+  //
+  //     ctx.fillStyle = "#fff";
+  //     ctx.font = "10px monospace";
+  //     ctx.fillText(zone.name, barX + 4, zoneY + 9);
+  //     ctx.fillText(`${Math.round(zone.health)}%`, barX + barWidth - 30, zoneY + 9);
+  //   });
+  // }, []);
 
   // Render
   const render = useCallback(() => {
@@ -665,7 +665,7 @@ const Home: NextPage = () => {
 
     // drawHealthBar(ctx, playerCar, "YOUR CAR", 30);
     // drawHealthBar(ctx, targetCar, "TARGET", 120);
-  }, [drawCar, drawHealthBar]);
+  }, [drawCar]);
 
   // Game loop
   const gameLoop = useCallback(() => {
