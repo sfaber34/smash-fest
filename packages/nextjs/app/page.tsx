@@ -5,65 +5,82 @@ import type { NextPage } from "next";
 import { Joystick } from "react-joystick-component";
 import type { IJoystickUpdateEvent } from "react-joystick-component/build/lib/Joystick";
 
-// Haptic queue for iOS (Safari requires user gesture to trigger haptics)
-let pendingHaptic: "light" | "medium" | "heavy" | null = null;
+// ========================================
+// HAPTIC CODE - COMMENTED OUT FOR NOW
+// ========================================
+// // Haptic queue for iOS (Safari requires user gesture to trigger haptics)
+// let pendingHaptic: "light" | "medium" | "heavy" | null = null;
+//
+// // Direct iOS haptic implementation using checkbox switch trick
+// const triggerIOSHaptic = (count: number = 1) => {
+//   if (typeof document === "undefined") return;
+//
+//   const fire = () => {
+//     const checkbox = document.createElement("input");
+//     checkbox.type = "checkbox";
+//     checkbox.setAttribute("switch", "");
+//     checkbox.style.position = "fixed";
+//     checkbox.style.opacity = "0";
+//     checkbox.style.pointerEvents = "none";
+//     document.body.appendChild(checkbox);
+//     checkbox.click();
+//     checkbox.remove();
+//   };
+//
+//   for (let i = 0; i < count; i++) {
+//     setTimeout(fire, i * 50);
+//   }
+// };
+//
+// // Cross-platform haptic trigger
+// const triggerHapticDirect = (intensity: "light" | "medium" | "heavy" = "medium") => {
+//   // Try navigator.vibrate first (Android)
+//   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+//     const duration = intensity === "light" ? 10 : intensity === "medium" ? 25 : 50;
+//     navigator.vibrate(duration);
+//   }
+//
+//   // Also try iOS checkbox trick
+//   const count = intensity === "heavy" ? 3 : intensity === "medium" ? 2 : 1;
+//   triggerIOSHaptic(count);
+// };
+//
+// // Queue a haptic to be triggered on next user touch (for iOS Safari compatibility)
+// const queueHaptic = (intensity: "light" | "medium" | "heavy" = "medium") => {
+//   // Keep the strongest pending haptic
+//   if (!pendingHaptic || intensity === "heavy" || (intensity === "medium" && pendingHaptic === "light")) {
+//     pendingHaptic = intensity;
+//   }
+// };
+//
+// // Fire pending haptic - call this from user gesture handlers (touch/click)
+// const firePendingHaptic = () => {
+//   if (!pendingHaptic) return;
+//
+//   triggerHapticDirect(pendingHaptic);
+//   pendingHaptic = null;
+// };
+// ========================================
 
-// Direct iOS haptic implementation using checkbox switch trick
-const triggerIOSHaptic = (count: number = 1) => {
-  if (typeof document === "undefined") return;
-
-  const fire = () => {
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.setAttribute("switch", "");
-    checkbox.style.position = "fixed";
-    checkbox.style.opacity = "0";
-    checkbox.style.pointerEvents = "none";
-    document.body.appendChild(checkbox);
-    checkbox.click();
-    checkbox.remove();
-  };
-
-  for (let i = 0; i < count; i++) {
-    setTimeout(fire, i * 50);
-  }
-};
-
-// Cross-platform haptic trigger
-const triggerHapticDirect = (intensity: "light" | "medium" | "heavy" = "medium") => {
-  // Try navigator.vibrate first (Android)
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-    const duration = intensity === "light" ? 10 : intensity === "medium" ? 25 : 50;
-    navigator.vibrate(duration);
-  }
-
-  // Also try iOS checkbox trick
-  const count = intensity === "heavy" ? 3 : intensity === "medium" ? 2 : 1;
-  triggerIOSHaptic(count);
-};
-
-// Queue a haptic to be triggered on next user touch (for iOS Safari compatibility)
-const queueHaptic = (intensity: "light" | "medium" | "heavy" = "medium") => {
-  // Keep the strongest pending haptic
-  if (!pendingHaptic || intensity === "heavy" || (intensity === "medium" && pendingHaptic === "light")) {
-    pendingHaptic = intensity;
-  }
-};
-
-// Fire pending haptic - call this from user gesture handlers (touch/click)
-const firePendingHaptic = () => {
-  if (!pendingHaptic) return;
-
-  triggerHapticDirect(pendingHaptic);
-  pendingHaptic = null;
-};
-
-// Constants
+// Viewport (what we see) constants
 const CANVAS_WIDTH = 900;
 const CANVAS_HEIGHT = 600;
+
+// World (total drivable area) constants - 3x the viewport size
+const WORLD_WIDTH = 2700;
+const WORLD_HEIGHT = 1800;
+
+// Car constants
 const CAR_WIDTH = 50;
 const CAR_HEIGHT = 30;
 const WALL_THICKNESS = 20;
+
+// Camera scroll threshold - start scrolling when player is within this % of viewport edge
+const SCROLL_THRESHOLD = 0.35;
+
+// Mini-map constants
+const MINIMAP_WIDTH = 150;
+const MINIMAP_HEIGHT = 100;
 
 // Physics constants
 const ACCELERATION = 0.15;
@@ -181,17 +198,22 @@ const getTotalHealth = (car: Car): number => {
 
 const Home: NextPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const playerCarRef = useRef<Car>(createCar(200, CANVAS_HEIGHT / 2, "#e74c3c", 0));
-  const targetCarRef = useRef<Car>(createCar(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, "#3498db", Math.PI / 4, false));
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Start player in center of world
+  const playerCarRef = useRef<Car>(createCar(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, "#e74c3c", 0));
+  // Place target car nearby
+  const targetCarRef = useRef<Car>(createCar(WORLD_WIDTH / 2 + 200, WORLD_HEIGHT / 2, "#3498db", Math.PI / 4, false));
   const inputRef = useRef<AnalogInput>({ forward: 0, reverse: 0, left: 0, right: 0 });
   const animationFrameRef = useRef<number>(0);
   const damagePopupsRef = useRef<DamagePopup[]>([]);
+  // Camera offset - tracks how much we've scrolled the view
+  const cameraRef = useRef({ x: WORLD_WIDTH / 2 - CANVAS_WIDTH / 2, y: WORLD_HEIGHT / 2 - CANVAS_HEIGHT / 2 });
   const [, setSpeed] = useState(0);
   const [, setPlayerHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const [, setTargetHealth] = useState({ front: 100, rear: 100, left: 100, right: 100 });
   const lastCollisionRef = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
-  const [hapticsEnabled, setHapticsEnabled] = useState(false);
+  // const [hapticsEnabled, setHapticsEnabled] = useState(false); // Haptics disabled for now
 
   // Detect mobile/touch device
   useEffect(() => {
@@ -205,8 +227,8 @@ const Home: NextPage = () => {
 
   // Handle joystick input - analog values based on joystick position
   const handleJoystickMove = useCallback((event: IJoystickUpdateEvent) => {
-    // Fire any pending haptics on user touch (iOS Safari requirement)
-    firePendingHaptic();
+    // // Fire any pending haptics on user touch (iOS Safari requirement)
+    // firePendingHaptic();
 
     const deadzone = 0.15; // Small deadzone to prevent drift
     const x = event.x ?? 0;
@@ -234,8 +256,8 @@ const Home: NextPage = () => {
   }, []);
 
   const handleJoystickStop = useCallback(() => {
-    // Fire any pending haptics on user touch release
-    firePendingHaptic();
+    // // Fire any pending haptics on user touch release
+    // firePendingHaptic();
 
     inputRef.current.forward = 0;
     inputRef.current.reverse = 0;
@@ -296,9 +318,9 @@ const Home: NextPage = () => {
 
       const damage = Math.round((impactSpeed - MIN_IMPACT_FOR_DAMAGE) * DAMAGE_MULTIPLIER);
 
-      // Queue haptic feedback based on impact intensity (fired on next user touch)
-      const hapticIntensity = damage > 15 ? "heavy" : damage > 8 ? "medium" : "light";
-      queueHaptic(hapticIntensity);
+      // // Queue haptic feedback based on impact intensity (fired on next user touch)
+      // const hapticIntensity = damage > 15 ? "heavy" : damage > 8 ? "medium" : "light";
+      // queueHaptic(hapticIntensity);
 
       // Attacker takes much less damage
       playerCar.health[playerHitZone] = Math.max(0, playerCar.health[playerHitZone] - damage * ATTACKER_DAMAGE_RATIO);
@@ -402,7 +424,7 @@ const Home: NextPage = () => {
       handleCarCollision(car, targetCar);
     }
 
-    // Wall collisions for player
+    // Wall collisions for player (using WORLD boundaries)
     const corners = getCarCorners(car);
     let collided = false;
 
@@ -414,8 +436,8 @@ const Home: NextPage = () => {
         car.vy *= COLLISION_DAMPING;
         collided = true;
       }
-      if (corner.x > CANVAS_WIDTH - WALL_THICKNESS) {
-        car.x -= corner.x - (CANVAS_WIDTH - WALL_THICKNESS);
+      if (corner.x > WORLD_WIDTH - WALL_THICKNESS) {
+        car.x -= corner.x - (WORLD_WIDTH - WALL_THICKNESS);
         car.vx = -Math.abs(car.vx) * BOUNCE_FACTOR;
         car.vx *= COLLISION_DAMPING;
         car.vy *= COLLISION_DAMPING;
@@ -428,8 +450,8 @@ const Home: NextPage = () => {
         car.vy *= COLLISION_DAMPING;
         collided = true;
       }
-      if (corner.y > CANVAS_HEIGHT - WALL_THICKNESS) {
-        car.y -= corner.y - (CANVAS_HEIGHT - WALL_THICKNESS);
+      if (corner.y > WORLD_HEIGHT - WALL_THICKNESS) {
+        car.y -= corner.y - (WORLD_HEIGHT - WALL_THICKNESS);
         car.vy = -Math.abs(car.vy) * BOUNCE_FACTOR;
         car.vx *= COLLISION_DAMPING;
         car.vy *= COLLISION_DAMPING;
@@ -439,7 +461,7 @@ const Home: NextPage = () => {
 
     if (collided) car.angularVel += (Math.random() - 0.5) * 0.1;
 
-    // Wall collisions for target
+    // Wall collisions for target (using WORLD boundaries)
     const targetCorners = getCarCorners(targetCar);
     let targetCollided = false;
 
@@ -451,8 +473,8 @@ const Home: NextPage = () => {
         targetCar.vy *= COLLISION_DAMPING;
         targetCollided = true;
       }
-      if (corner.x > CANVAS_WIDTH - WALL_THICKNESS) {
-        targetCar.x -= corner.x - (CANVAS_WIDTH - WALL_THICKNESS);
+      if (corner.x > WORLD_WIDTH - WALL_THICKNESS) {
+        targetCar.x -= corner.x - (WORLD_WIDTH - WALL_THICKNESS);
         targetCar.vx = -Math.abs(targetCar.vx) * BOUNCE_FACTOR;
         targetCar.vx *= COLLISION_DAMPING;
         targetCar.vy *= COLLISION_DAMPING;
@@ -465,8 +487,8 @@ const Home: NextPage = () => {
         targetCar.vy *= COLLISION_DAMPING;
         targetCollided = true;
       }
-      if (corner.y > CANVAS_HEIGHT - WALL_THICKNESS) {
-        targetCar.y -= corner.y - (CANVAS_HEIGHT - WALL_THICKNESS);
+      if (corner.y > WORLD_HEIGHT - WALL_THICKNESS) {
+        targetCar.y -= corner.y - (WORLD_HEIGHT - WALL_THICKNESS);
         targetCar.vy = -Math.abs(targetCar.vy) * BOUNCE_FACTOR;
         targetCar.vx *= COLLISION_DAMPING;
         targetCar.vy *= COLLISION_DAMPING;
@@ -475,6 +497,31 @@ const Home: NextPage = () => {
     }
 
     if (targetCollided) targetCar.angularVel += (Math.random() - 0.5) * 0.08;
+
+    // Update camera to follow player with smooth scrolling at 30% boundary
+    const camera = cameraRef.current;
+    const playerScreenX = car.x - camera.x;
+    const playerScreenY = car.y - camera.y;
+
+    const scrollMarginX = CANVAS_WIDTH * SCROLL_THRESHOLD;
+    const scrollMarginY = CANVAS_HEIGHT * SCROLL_THRESHOLD;
+
+    // Scroll camera when player approaches edges
+    if (playerScreenX < scrollMarginX) {
+      camera.x = car.x - scrollMarginX;
+    } else if (playerScreenX > CANVAS_WIDTH - scrollMarginX) {
+      camera.x = car.x - (CANVAS_WIDTH - scrollMarginX);
+    }
+
+    if (playerScreenY < scrollMarginY) {
+      camera.y = car.y - scrollMarginY;
+    } else if (playerScreenY > CANVAS_HEIGHT - scrollMarginY) {
+      camera.y = car.y - (CANVAS_HEIGHT - scrollMarginY);
+    }
+
+    // Clamp camera to world bounds
+    camera.x = Math.max(0, Math.min(WORLD_WIDTH - CANVAS_WIDTH, camera.x));
+    camera.y = Math.max(0, Math.min(WORLD_HEIGHT - CANVAS_HEIGHT, camera.y));
 
     damagePopupsRef.current = damagePopupsRef.current
       .map(p => ({ ...p, age: p.age + 1, y: p.y - 1 }))
@@ -599,37 +646,47 @@ const Home: NextPage = () => {
 
     const playerCar = playerCarRef.current;
     const targetCar = targetCarRef.current;
+    const camera = cameraRef.current;
 
-    ctx.fillStyle = "#8B7355";
+    // Clear the canvas
+    ctx.fillStyle = "#1a1a1a";
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+    // Save context and apply camera transform
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    // Draw the world background (dirt arena)
+    ctx.fillStyle = "#8B7355";
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    // Draw dirt texture spots across the entire world
     ctx.fillStyle = "#9C8565";
-    for (let i = 0; i < 50; i++) {
-      const x = (Math.sin(i * 123.456) * 0.5 + 0.5) * CANVAS_WIDTH;
-      const y = (Math.cos(i * 789.012) * 0.5 + 0.5) * CANVAS_HEIGHT;
+    for (let i = 0; i < 150; i++) {
+      const x = (Math.sin(i * 123.456) * 0.5 + 0.5) * WORLD_WIDTH;
+      const y = (Math.cos(i * 789.012) * 0.5 + 0.5) * WORLD_HEIGHT;
       ctx.beginPath();
       ctx.arc(x, y, 20 + Math.sin(i) * 10, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    // Draw world boundary walls
     ctx.fillStyle = "#5D4E37";
-    ctx.fillRect(0, 0, CANVAS_WIDTH, WALL_THICKNESS);
-    ctx.fillRect(0, CANVAS_HEIGHT - WALL_THICKNESS, CANVAS_WIDTH, WALL_THICKNESS);
-    ctx.fillRect(0, 0, WALL_THICKNESS, CANVAS_HEIGHT);
-    ctx.fillRect(CANVAS_WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, WORLD_WIDTH, WALL_THICKNESS); // Top
+    ctx.fillRect(0, WORLD_HEIGHT - WALL_THICKNESS, WORLD_WIDTH, WALL_THICKNESS); // Bottom
+    ctx.fillRect(0, 0, WALL_THICKNESS, WORLD_HEIGHT); // Left
+    ctx.fillRect(WORLD_WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, WORLD_HEIGHT); // Right
 
+    // Draw inner wall border
     ctx.strokeStyle = "#3D2E17";
     ctx.lineWidth = 3;
-    ctx.strokeRect(
-      WALL_THICKNESS,
-      WALL_THICKNESS,
-      CANVAS_WIDTH - WALL_THICKNESS * 2,
-      CANVAS_HEIGHT - WALL_THICKNESS * 2,
-    );
+    ctx.strokeRect(WALL_THICKNESS, WALL_THICKNESS, WORLD_WIDTH - WALL_THICKNESS * 2, WORLD_HEIGHT - WALL_THICKNESS * 2);
 
+    // Draw cars
     drawCar(ctx, targetCar);
     drawCar(ctx, playerCar);
 
+    // Draw damage popups (in world space)
     damagePopupsRef.current.forEach(popup => {
       const alpha = 1 - popup.age / 60;
       ctx.fillStyle = `rgba(255, 50, 50, ${alpha})`;
@@ -640,6 +697,12 @@ const Home: NextPage = () => {
       ctx.fillText(popup.zone.toUpperCase(), popup.x - 10, popup.y + 12);
     });
 
+    // Restore context (back to screen space)
+    ctx.restore();
+
+    // === UI ELEMENTS (drawn in screen space) ===
+
+    // Speed bar
     const speedBarWidth = 150;
     const speedBarHeight = 15;
     const speedBarX = 20;
@@ -667,12 +730,71 @@ const Home: NextPage = () => {
     // drawHealthBar(ctx, targetCar, "TARGET", 120);
   }, [drawCar]);
 
+  // Render mini-map on separate canvas
+  const renderMiniMap = useCallback(() => {
+    const canvas = minimapCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const playerCar = playerCarRef.current;
+    const targetCar = targetCarRef.current;
+    const camera = cameraRef.current;
+
+    // Clear mini-map
+    ctx.clearRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Mini-map arena (walls)
+    ctx.fillStyle = "#5D4E37";
+    ctx.fillRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Mini-map inner area (drivable zone)
+    const innerMargin = (WALL_THICKNESS / WORLD_WIDTH) * MINIMAP_WIDTH;
+    ctx.fillStyle = "#8B7355";
+    ctx.fillRect(innerMargin, innerMargin, MINIMAP_WIDTH - innerMargin * 2, MINIMAP_HEIGHT - innerMargin * 2);
+
+    // Mini-map border
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
+
+    // Draw viewport rectangle on mini-map
+    const viewportMinimapX = (camera.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const viewportMinimapY = (camera.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+    const viewportMinimapW = (CANVAS_WIDTH / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const viewportMinimapH = (CANVAS_HEIGHT / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(viewportMinimapX, viewportMinimapY, viewportMinimapW, viewportMinimapH);
+
+    // Player dot on mini-map
+    const playerMinimapX = (playerCar.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const playerMinimapY = (playerCar.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+
+    ctx.fillStyle = "#e74c3c";
+    ctx.beginPath();
+    ctx.arc(playerMinimapX, playerMinimapY, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Target dot on mini-map
+    const targetMinimapX = (targetCar.x / WORLD_WIDTH) * MINIMAP_WIDTH;
+    const targetMinimapY = (targetCar.y / WORLD_HEIGHT) * MINIMAP_HEIGHT;
+
+    ctx.fillStyle = "#3498db";
+    ctx.beginPath();
+    ctx.arc(targetMinimapX, targetMinimapY, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }, []);
+
   // Game loop
   const gameLoop = useCallback(() => {
     updatePhysics();
     render();
+    renderMiniMap();
     animationFrameRef.current = requestAnimationFrame(gameLoop);
-  }, [updatePhysics, render]);
+  }, [updatePhysics, render, renderMiniMap]);
 
   // Keyboard input
   useEffect(() => {
@@ -723,9 +845,31 @@ const Home: NextPage = () => {
           objectFit: "contain",
         }}
         tabIndex={0}
-        onTouchStart={firePendingHaptic}
-        onTouchMove={firePendingHaptic}
+        // onTouchStart={firePendingHaptic}
+        // onTouchMove={firePendingHaptic}
       />
+
+      {/* Mini-map - fixed to upper right of page */}
+      <div
+        style={{
+          position: "fixed",
+          top: "16px",
+          right: "16px",
+          zIndex: 40,
+          borderRadius: "4px",
+          overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.5)",
+        }}
+      >
+        <canvas
+          ref={minimapCanvasRef}
+          width={MINIMAP_WIDTH}
+          height={MINIMAP_HEIGHT}
+          style={{
+            display: "block",
+          }}
+        />
+      </div>
 
       {/* Mobile joystick overlay */}
       {isMobile && (
@@ -749,8 +893,8 @@ const Home: NextPage = () => {
         </div>
       )}
 
-      {/* Enable Haptics button - user must tap once to unlock iOS haptics */}
-      {isMobile && !hapticsEnabled && (
+      {/* Enable Haptics button - COMMENTED OUT FOR NOW */}
+      {/* {isMobile && !hapticsEnabled && (
         <div
           style={{
             position: "fixed",
@@ -786,10 +930,10 @@ const Home: NextPage = () => {
             />
           </label>
         </div>
-      )}
+      )} */}
 
-      {/* Haptics enabled indicator */}
-      {isMobile && hapticsEnabled && (
+      {/* Haptics enabled indicator - COMMENTED OUT FOR NOW */}
+      {/* {isMobile && hapticsEnabled && (
         <div
           style={{
             position: "fixed",
@@ -805,7 +949,7 @@ const Home: NextPage = () => {
         >
           🎮 Haptics ON
         </div>
-      )}
+      )} */}
     </div>
   );
 };
